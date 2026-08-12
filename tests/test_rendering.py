@@ -27,3 +27,11 @@ def test_all_three_directional_aim_states_render():
     frames = [render_lower_frame("AIM", "", "A LOCK  B BACK", aim=aim) for aim in AimPosition]
     assert all(len(frame) == LOWER_RGB888_BYTE_LENGTH for frame in frames)
     assert len(set(frames)) == 3
+
+
+def test_main_screen_uses_arrows_and_setup_keeps_board_visible():
+    plain = render_frame(score=0, balls_used=0)
+    aim = render_frame(score=0, balls_used=0, ui_mode="aim", aim_position=(64, 96), aim_slots=True)
+    # The pocket area remains identical while the subtle lane indicator changes.
+    assert plain[:90 * 128 * 3] == aim[:90 * 128 * 3]
+    assert plain != aim

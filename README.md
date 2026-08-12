@@ -7,6 +7,12 @@
 This focused playtest is a single-player, 128×128 Roller Ball board with a
 64×32 setup display.
 
+In the Dartsnut emulator, launch with a visible scaled Screen 2 window:
+
+```bash
+python main.py --screen2-window
+```
+
 - **Arcade:** choose Arcade, throw one physical dart, watch the virtual ball
   travel to its destination, score, then remove the dart for the next ball.
 - **Pro:** choose one of three Aim positions with Left/Right, lock with A, mash

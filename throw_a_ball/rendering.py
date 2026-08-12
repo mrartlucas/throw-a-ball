@@ -79,12 +79,25 @@ def _meter(f,taps,zone):
         c=YELLOW if zone is PowerZone.YELLOW else GREEN if zone is PowerZone.GREEN else RED
         _rect(f,14,113,3,10,c)
 
+def _aim_arrow(f, x, y, direction, color):
+    """Draw one compact lane-direction arrow, matching Screen 2's language."""
+    if direction == "left":
+        points = ((x-4,y),(x+4,y),(x-4,y),(x-1,y-3),(x-4,y),(x-1,y+3))
+    elif direction == "right":
+        points = ((x-4,y),(x+4,y),(x+4,y),(x+1,y-3),(x+4,y),(x+1,y+3))
+    else:
+        points = ((x,y+4),(x,y-4),(x,y-4),(x-3,y-1),(x,y-4),(x+3,y-1))
+    for start in range(0, len(points), 2):
+        x0, y0 = points[start]; x1, y1 = points[start + 1]
+        steps = max(abs(x1-x0), abs(y1-y0), 1)
+        for step in range(steps + 1):
+            _px(f, round(x0 + (x1-x0)*step/steps), round(y0 + (y1-y0)*step/steps), color)
+
+
 def _aim_slots(f, selected):
-    for x in (50,64,78):
-        _circle(f,x,96,4,GRAY,hollow=True,thickness=1)
-    if selected:
-        _circle(f,selected[0],selected[1],6,ORANGE,hollow=True,thickness=2)
-        _circle(f,selected[0],selected[1],1,WHITE)
+    selected_x = selected[0] if selected else None
+    for x, direction in ((50,"left"),(64,"up"),(78,"right")):
+        _aim_arrow(f, x, 96, direction, ORANGE if x == selected_x else GRAY)
 
 def render_frame(*,score:int,balls_used:int,ball_position=None,last_shot:ShotResult|None=None,message_code:int=0,
                  ui_mode:str="play",style_index:int=0,aim_position:tuple[int,int]|None=None,aim_slots:bool=False,
@@ -92,10 +105,7 @@ def render_frame(*,score:int,balls_used:int,ball_position=None,last_shot:ShotRes
     f=_frame(); _draw_board(f)
     _rect(f,8,6,112,6,DARK_GRAY); _number(f,score,11,7,YELLOW,1); _number(f,max(0,9-balls_used),105,7,WHITE,1)
 
-    if ui_mode=="style":
-        _rect(f,18,44,92,42,DARK_GRAY); _rect(f,24,51,36,28,BLUE if style_index==0 else GRAY); _rect(f,68,51,36,28,PURPLE if style_index==1 else GRAY)
-        _number(f,1,38,61,WHITE,2); _number(f,2,82,61,WHITE,2); _rect(f,28 if style_index==0 else 72,82,28,3,YELLOW)
-    elif ui_mode=="aim":
+    if ui_mode=="aim":
         if aim_slots:
             _aim_slots(f,aim_position)
         elif aim_position:

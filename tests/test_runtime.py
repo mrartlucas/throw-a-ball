@@ -22,7 +22,12 @@ class FakeSdk:
         pressed, self.pressed = self.pressed, set()
         return {name: True for name in pressed}
     def update_frame_buffer(self, frame): self.frames.append(bytes(frame)); return True
-    def update_lower_frame_buffer(self, frame): self.lower_frames.append(bytes(frame)); return True
+    def close(self): self.closed = True
+
+
+class FakeScreen2:
+    def __init__(self): self.frames = []; self.closed = False
+    def submit(self, frame): self.frames.append(frame)
     def close(self): self.closed = True
 
 
@@ -46,7 +51,8 @@ def enter_play(runtime, sdk, *, pro=False):
 
 def test_setup_back_navigation_and_center_default():
     sdk, clock = FakeSdk(), Clock()
-    runtime = RollerBallRuntime(DartsnutFacade(sdk), clock)
+    screen2 = FakeScreen2()
+    runtime = RollerBallRuntime(DartsnutFacade(sdk), clock, screen2)
     assert runtime.phase is Phase.GAME_SELECT
     press(runtime, sdk, "btn_a"); assert runtime.phase is Phase.MACHINE_SELECT
     press(runtime, sdk, "btn_b"); assert runtime.phase is Phase.GAME_SELECT
@@ -59,6 +65,7 @@ def test_setup_back_navigation_and_center_default():
     press(runtime, sdk, "btn_a"); assert runtime.phase is Phase.PRO_POWER
     press(runtime, sdk, "btn_b"); assert runtime.phase is Phase.PRO_AIM
     press(runtime, sdk, "btn_b"); assert runtime.phase is Phase.STYLE_SELECT
+    assert screen2.frames and all(len(frame) == 64 * 32 * 3 for frame in screen2.frames)
 
 
 def test_pro_uses_one_dart_only_after_aim_and_power():

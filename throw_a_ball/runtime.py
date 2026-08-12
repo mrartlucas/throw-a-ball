@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from enum import Enum
 import time
-from typing import Callable
+from typing import Callable, Protocol
 
 from throw_a_ball.platform import DartsnutFacade
 from throw_a_ball.rendering import render_frame, render_lower_frame
@@ -35,10 +35,17 @@ class Phase(str, Enum):
 AIM_ORDER = (AimPosition.LEFT, AimPosition.CENTER, AimPosition.RIGHT)
 
 
+class SecondaryDisplay(Protocol):
+    def submit(self, frame: bytes) -> None: ...
+    def close(self) -> None: ...
+
+
 class RollerBallRuntime:
-    def __init__(self, facade: DartsnutFacade, monotonic: Callable[[], float] = time.monotonic):
+    def __init__(self, facade: DartsnutFacade, monotonic: Callable[[], float] = time.monotonic,
+                 secondary_display: SecondaryDisplay | None = None):
         self.facade = facade
         self.monotonic = monotonic
+        self.secondary_display = secondary_display
         self.phase = Phase.GAME_SELECT
         self.style_index = 0
         self.style: PlayStyle | None = None
@@ -53,7 +60,7 @@ class RollerBallRuntime:
         self.power_started_at = None
         self.power_taps = 0
         self.power_zone: PowerZone | None = None
-        self.cached_frame = render_frame(score=0, balls_used=0, ui_mode="style", style_index=0)
+        self.cached_frame = render_frame(score=0, balls_used=0)
 
     def _lower_frame(self):
         if self.phase is Phase.GAME_SELECT:
@@ -78,10 +85,11 @@ class RollerBallRuntime:
 
     def _submit(self):
         self.facade.submit(self.cached_frame)
-        self.facade.submit_lower(self._lower_frame())
+        if self.secondary_display is not None:
+            self.secondary_display.submit(self._lower_frame())
 
     def restart(self):
-        self.__init__(self.facade, self.monotonic)
+        self.__init__(self.facade, self.monotonic, self.secondary_display)
 
     def _active(self, index):
         if index is None:
@@ -164,7 +172,7 @@ class RollerBallRuntime:
             elif "btn_b" in buttons:
                 self.phase = Phase.MACHINE_SELECT
             else:
-                self.cached_frame = render_frame(score=0, balls_used=0, ui_mode="style", style_index=self.style_index)
+                self.cached_frame = render_frame(score=0, balls_used=0)
             self._submit()
             return
 
@@ -188,7 +196,7 @@ class RollerBallRuntime:
         if self.phase is Phase.PRO_AIM:
             if "btn_b" in buttons:
                 self.phase = Phase.STYLE_SELECT
-                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="style", style_index=1)
+                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used)
                 self._submit()
                 return
             if "btn_left" in buttons and self.aim_index > 0:
@@ -292,11 +300,14 @@ def run_roller_ball(
     *,
     frame_seconds: float = 1 / 30,
     sleeper: Callable[[float], object] = time.sleep,
+    secondary_display: SecondaryDisplay | None = None,
 ) -> None:
-    runtime = RollerBallRuntime(facade)
+    runtime = RollerBallRuntime(facade, secondary_display=secondary_display)
     try:
         while facade.is_running():
             runtime.step()
             sleeper(frame_seconds)
     finally:
+        if secondary_display is not None:
+            secondary_display.close()
         facade.close()
