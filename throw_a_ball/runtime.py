@@ -10,6 +10,34 @@ from throw_a_ball.roller_ball import (
     power_zone_for_taps, resolve_arcade_shot, resolve_pro_shot, sample_ball_position,
 )
 
+FULL_WIDTH=128
+FULL_HEIGHT=160
+FULL_RGB888_BYTE_LENGTH=FULL_WIDTH*FULL_HEIGHT*3
+MAIN_WIDTH=128
+MAIN_HEIGHT=128
+LOWER_WIDTH=64
+LOWER_HEIGHT=32
+
+
+def compose_dartsnut_full_frame(main_frame:bytes,lower_frame:bytes)->bytes:
+    """Pack Screen 1 and Screen 2 into Dartsnut's verified 128x160 RGB888 layout."""
+    if type(main_frame) is not bytes or len(main_frame)!=MAIN_WIDTH*MAIN_HEIGHT*3:
+        raise ValueError("main_frame must be exact 128x128 RGB888 bytes")
+    if type(lower_frame) is not bytes or len(lower_frame)!=LOWER_WIDTH*LOWER_HEIGHT*3:
+        raise ValueError("lower_frame must be exact 64x32 RGB888 bytes")
+    full=bytearray((3,5,12)*(FULL_WIDTH*FULL_HEIGHT))
+    full[:len(main_frame)]=main_frame
+    full_row_bytes=FULL_WIDTH*3
+    lower_row_bytes=LOWER_WIDTH*3
+    for row in range(LOWER_HEIGHT):
+        src=row*lower_row_bytes
+        dst=(MAIN_HEIGHT+row)*full_row_bytes
+        full[dst:dst+lower_row_bytes]=lower_frame[src:src+lower_row_bytes]
+    if len(full)!=FULL_RGB888_BYTE_LENGTH:
+        raise RuntimeError("full framebuffer produced wrong size")
+    return bytes(full)
+
+
 class PlayStyle(str, Enum):
     ARCADE="arcade"
     PRO="pro"
@@ -71,9 +99,10 @@ class RollerBallRuntime:
         return render_lower_frame("THROW","READY","THROW")
 
     def _submit(self):
-        self.facade.submit(self.cached_frame)
+        lower=self._lower_frame()
+        self.facade.submit(compose_dartsnut_full_frame(self.cached_frame,lower))
         if self.secondary_display is not None:
-            self.secondary_display.submit(self._lower_frame())
+            self.secondary_display.submit(lower)
 
     def restart(self):
         self.__init__(self.facade,self.monotonic,self.secondary_display)
