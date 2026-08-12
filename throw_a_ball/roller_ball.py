@@ -9,7 +9,8 @@ BOARD_SIZE = 128
 BALLS_PER_GAME = 9
 ROLL_SECONDS = 0.72
 RESULT_HOLD_SECONDS = 1.0
-POWER_SECONDS = 1.6
+# Playtest value. Long enough to feel the Test-Your-Might mash before final tuning.
+POWER_SECONDS = 5.0
 
 
 class PowerZone(str, Enum):
@@ -113,9 +114,10 @@ def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZ
 
 
 def power_zone_for_taps(taps: int) -> PowerZone:
-    if taps >= 9:
+    """Temporary five-second playtest thresholds for the rapid-A power mash."""
+    if taps >= 20:
         return PowerZone.RED
-    if taps >= 5:
+    if taps >= 10:
         return PowerZone.GREEN
     return PowerZone.YELLOW
 
