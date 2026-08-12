@@ -18,6 +18,19 @@ class PowerZone(str, Enum):
     RED = "red"
 
 
+class AimPosition(str, Enum):
+    LEFT = "left"
+    CENTER = "center"
+    RIGHT = "right"
+
+
+AIM_X = {
+    AimPosition.LEFT: 50,
+    AimPosition.CENTER: 64,
+    AimPosition.RIGHT: 78,
+}
+
+
 @dataclass(frozen=True)
 class Pocket:
     name: str
@@ -79,21 +92,24 @@ def resolve_arcade_shot(x: int, y: int) -> ShotResult:
     return _resolve_effective(x, y, x, y)
 
 
-def resolve_pro_shot(aim_x: int, aim_y: int, power: PowerZone) -> ShotResult:
-    """Use the physical dart as aim, then apply the selected power as vertical correction."""
-    _validate_coordinate(aim_x, "aim_x")
-    _validate_coordinate(aim_y, "aim_y")
+def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZone) -> ShotResult:
+    """Combine fixed lane aim, final dart hit, and power correction."""
+    if type(aim) is not AimPosition:
+        raise TypeError("aim must be an AimPosition")
+    _validate_coordinate(throw_x, "throw_x")
+    _validate_coordinate(throw_y, "throw_y")
     if type(power) is not PowerZone:
         raise TypeError("power must be a PowerZone")
 
-    x = aim_x
-    y = aim_y
+    # Fixed aim steers the lane path while the dart still supplies most of the shot skill.
+    x = round(throw_x * 0.72 + AIM_X[aim] * 0.28)
+    y = throw_y
     if power is PowerZone.RED:
         y -= 13
     elif power is PowerZone.YELLOW:
         y += 10
     y = max(0, min(127, y))
-    return _resolve_effective(x, y, aim_x, aim_y)
+    return _resolve_effective(x, y, throw_x, throw_y)
 
 
 def power_zone_for_taps(taps: int) -> PowerZone:
