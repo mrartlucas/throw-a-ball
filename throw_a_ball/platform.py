@@ -42,9 +42,12 @@ class DartsnutFacade:
                 active.append(DartHit(int(dart_index), int(x), int(y)))
         return tuple(active)
 
-    def a_pressed(self) -> bool:
+    def buttons(self) -> frozenset[str]:
         events = self._sdk.get_button_events()
-        return bool(events.get("btn_a", False))
+        return frozenset(name for name, pressed in events.items() if pressed)
+
+    def a_pressed(self) -> bool:
+        return "btn_a" in self.buttons()
 
     def submit(self, frame: bytes) -> bool:
         return bool(self._sdk.update_frame_buffer(bytearray(frame)))
