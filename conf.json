@@ -3,8 +3,8 @@
   "type": "game",
   "name": "Throw a Ball",
   "author": "Throw A Way Games",
-  "version": "0.1.0",
-  "description": "Playable Roller Ball Arcade prototype.",
+  "version": "0.2.0",
+  "description": "Playable Roller Ball Arcade + Pro prototype.",
   "size": [128, 128],
   "fields": [],
   "preview": [""]
