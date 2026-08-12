@@ -46,20 +46,49 @@ class RollerBallRuntime:
         self.shot_started_at = None
         self.result_started_at = None
         self.blocked_dart_index = None
+        self.stale_dart_indices: set[int] = set()
         self.aim_index = 1
         self.aim = AimPosition.CENTER
         self.power_started_at = None
         self.power_taps = 0
         self.power_zone: PowerZone | None = None
         self.cached_frame = render_frame(score=0, balls_used=0, ui_mode="style", style_index=0)
+        self._mark_active_darts_stale()
 
     def restart(self):
         self.__init__(self.facade, self.monotonic)
 
+    def _active_darts(self):
+        return self.facade.read_active_darts()
+
     def _active(self, index):
         if index is None:
             return False
-        return any(d.dart_index == index for d in self.facade.read_active_darts())
+        return any(d.dart_index == index for d in self._active_darts())
+
+    def _refresh_stale_darts(self):
+        """A stale dart becomes reusable only after it has physically left the board."""
+        active_indices = {dart.dart_index for dart in self._active_darts()}
+        self.stale_dart_indices.intersection_update(active_indices)
+
+    def _mark_active_darts_stale(self):
+        self.stale_dart_indices.update(dart.dart_index for dart in self._active_darts())
+
+    def _consume_nonready_dart_hits(self):
+        """Drain early/retained hit events so they cannot replay after THROW READY."""
+        for hit in self.facade.read_dart_hits():
+            self.stale_dart_indices.add(hit.dart_index)
+
+    def _fresh_hit(self):
+        """Return at most one legal fresh dart hit; retained/stale darts never launch a ball."""
+        self._refresh_stale_darts()
+        hits = self.facade.read_dart_hits()
+        for hit in hits:
+            if hit.dart_index in self.stale_dart_indices:
+                continue
+            self.stale_dart_indices.add(hit.dart_index)
+            return hit
+        return None
 
     def _aim_xy(self):
         return (AIM_X[self.aim], 96)
@@ -72,6 +101,10 @@ class RollerBallRuntime:
         self.power_started_at = None
         self.power_taps = 0
         self.power_zone = None
+        # Anything already sitting in the board when a new ball begins is not a legal throw.
+        self._refresh_stale_darts()
+        self._mark_active_darts_stale()
+        self._consume_nonready_dart_hits()
         if self.style is PlayStyle.PRO:
             self.phase = Phase.PRO_AIM
             self.cached_frame = render_frame(
@@ -113,8 +146,10 @@ class RollerBallRuntime:
     def step(self):
         now = self.monotonic()
         buttons = self.facade.buttons()
+        self._refresh_stale_darts()
 
         if self.phase is Phase.STYLE_SELECT:
+            self._consume_nonready_dart_hits()
             if "btn_left" in buttons or "btn_right" in buttons:
                 self.style_index = 1 - self.style_index
             if "btn_a" in buttons:
@@ -126,12 +161,14 @@ class RollerBallRuntime:
             return
 
         if self.phase is Phase.GAME_OVER:
+            self._consume_nonready_dart_hits()
             if "btn_a" in buttons:
                 self.restart()
             self.facade.submit(self.cached_frame)
             return
 
         if self.phase is Phase.WAIT_FOR_REMOVAL:
+            self._consume_nonready_dart_hits()
             if not self._active(self.blocked_dart_index):
                 self.blocked_dart_index = None
                 if self.balls_used >= BALLS_PER_GAME:
@@ -143,6 +180,7 @@ class RollerBallRuntime:
             return
 
         if self.phase is Phase.PRO_AIM:
+            self._consume_nonready_dart_hits()
             if "btn_left" in buttons and self.aim_index > 0:
                 self.aim_index -= 1
                 self.aim = AIM_ORDER[self.aim_index]
@@ -153,7 +191,7 @@ class RollerBallRuntime:
                 self.phase = Phase.PRO_POWER
                 self.power_started_at = now
                 self.power_taps = 0
-                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="power", power_taps=0)
+                self.cached_frame = render_frame(self.score, self.balls_used, ui_mode="power", power_taps=0)
             else:
                 self.cached_frame = render_frame(
                     score=self.score, balls_used=self.balls_used,
@@ -163,12 +201,17 @@ class RollerBallRuntime:
             return
 
         if self.phase is Phase.PRO_POWER:
+            self._consume_nonready_dart_hits()
             if "btn_a" in buttons:
                 self.power_taps += 1
             elapsed = now - self.power_started_at
             if elapsed >= POWER_SECONDS:
                 self.power_zone = power_zone_for_taps(self.power_taps)
                 self.phase = Phase.PRO_THROW_READY
+                # Establish a fresh-dart baseline exactly when the throw becomes armed.
+                self._refresh_stale_darts()
+                self._mark_active_darts_stale()
+                self._consume_nonready_dart_hits()
                 self.cached_frame = render_frame(
                     score=self.score, balls_used=self.balls_used,
                     ui_mode="ready", power_zone=self.power_zone,
@@ -177,12 +220,13 @@ class RollerBallRuntime:
             else:
                 self.cached_frame = render_frame(
                     score=self.score, balls_used=self.balls_used,
-                    ui_mode="power", power_taps=min(self.power_taps, 12)
+                    ui_mode="power", power_taps=self.power_taps
                 )
             self.facade.submit(self.cached_frame)
             return
 
         if self.phase is Phase.BALL_ROLL:
+            self._consume_nonready_dart_hits()
             progress = (now - self.shot_started_at) / ROLL_SECONDS
             if progress >= 1.0:
                 self.score += self.current_shot.score
@@ -206,19 +250,21 @@ class RollerBallRuntime:
             return
 
         if self.phase is Phase.RESULT:
+            self._consume_nonready_dart_hits()
             if now - self.result_started_at >= RESULT_HOLD_SECONDS:
                 self._finish_result_or_wait()
             self.facade.submit(self.cached_frame)
             return
 
-        hits = self.facade.read_dart_hits()
-        if self.phase is Phase.PRO_THROW_READY and hits:
-            hit = hits[0]
-            shot = resolve_pro_shot(self.aim, hit.x, hit.y, self.power_zone)
-            self._start_roll(shot, hit.dart_index, now)
-        elif self.phase is Phase.ARCADE_READY and hits:
-            hit = hits[0]
-            self._start_roll(resolve_arcade_shot(hit.x, hit.y), hit.dart_index, now)
+        if self.phase is Phase.PRO_THROW_READY:
+            hit = self._fresh_hit()
+            if hit is not None:
+                shot = resolve_pro_shot(self.aim, hit.x, hit.y, self.power_zone)
+                self._start_roll(shot, hit.dart_index, now)
+        elif self.phase is Phase.ARCADE_READY:
+            hit = self._fresh_hit()
+            if hit is not None:
+                self._start_roll(resolve_arcade_shot(hit.x, hit.y), hit.dart_index, now)
 
         self.facade.submit(self.cached_frame)
 
