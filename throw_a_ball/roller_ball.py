@@ -79,21 +79,21 @@ def resolve_arcade_shot(x: int, y: int) -> ShotResult:
     return _resolve_effective(x, y, x, y)
 
 
-def resolve_pro_shot(aim_x: int, aim_y: int, throw_x: int, throw_y: int, power: PowerZone) -> ShotResult:
-    """Blend setup aim with final dart; power corrects vertical reach."""
-    for value, name in ((aim_x, "aim_x"), (aim_y, "aim_y"), (throw_x, "throw_x"), (throw_y, "throw_y")):
-        _validate_coordinate(value, name)
+def resolve_pro_shot(aim_x: int, aim_y: int, power: PowerZone) -> ShotResult:
+    """Use the physical dart as aim, then apply the selected power as vertical correction."""
+    _validate_coordinate(aim_x, "aim_x")
+    _validate_coordinate(aim_y, "aim_y")
     if type(power) is not PowerZone:
         raise TypeError("power must be a PowerZone")
 
-    x = round(aim_x * 0.62 + throw_x * 0.38)
-    y = round(aim_y * 0.62 + throw_y * 0.38)
+    x = aim_x
+    y = aim_y
     if power is PowerZone.RED:
         y -= 13
     elif power is PowerZone.YELLOW:
         y += 10
     y = max(0, min(127, y))
-    return _resolve_effective(x, y, throw_x, throw_y)
+    return _resolve_effective(x, y, aim_x, aim_y)
 
 
 def power_zone_for_taps(taps: int) -> PowerZone:
