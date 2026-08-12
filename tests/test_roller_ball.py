@@ -1,4 +1,4 @@
-from throw_a_ball.roller_ball import BALLS_PER_GAME, resolve_arcade_shot, sample_ball_position
+from throw_a_ball.roller_ball import AIM_X, BALLS_PER_GAME, AimPosition, resolve_arcade_shot, sample_ball_position
 
 
 def test_placeholder_pocket_centers_score_exact_values():
@@ -31,3 +31,8 @@ def test_ball_starts_at_lane_and_finishes_at_target():
 
 def test_game_uses_nine_balls():
     assert BALLS_PER_GAME == 9
+
+
+def test_aim_has_exactly_three_positions():
+    assert tuple(AimPosition) == (AimPosition.LEFT, AimPosition.CENTER, AimPosition.RIGHT)
+    assert set(AIM_X) == set(AimPosition)

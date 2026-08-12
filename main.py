@@ -1,4 +1,4 @@
-"""Throw a Ball Roller Ball v0.1 entry point."""
+"""Throw a Ball Roller Ball v0.12 entry point."""
 
 from throw_a_ball.platform import DartsnutFacade
 from throw_a_ball.runtime import run_roller_ball

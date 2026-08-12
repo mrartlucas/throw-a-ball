@@ -1,11 +1,14 @@
 """Dependency-free RGB888 renderer for the 128x128 Roller Ball prototype."""
 from __future__ import annotations
 
-from throw_a_ball.roller_ball import POCKETS, PowerZone, ShotResult
+from throw_a_ball.roller_ball import AimPosition, POCKETS, PowerZone, ShotResult
 
 WIDTH = 128
 HEIGHT = 128
 RGB888_BYTE_LENGTH = WIDTH * HEIGHT * 3
+LOWER_WIDTH = 64
+LOWER_HEIGHT = 32
+LOWER_RGB888_BYTE_LENGTH = LOWER_WIDTH * LOWER_HEIGHT * 3
 Color = tuple[int, int, int]
 BLACK=(3,5,12); NAVY=(5,13,35); BLUE=(32,128,255); CYAN=(66,232,255); WHITE=(235,244,255)
 YELLOW=(255,202,46); RED=(245,52,40); GREEN=(70,218,106); PURPLE=(178,78,255); GRAY=(98,112,140)
@@ -17,6 +20,21 @@ _DIGITS={
 "4":("101","101","111","001","001"),"5":("111","100","111","001","111"),
 "6":("111","100","111","101","111"),"7":("111","001","010","010","010"),
 "8":("111","101","111","101","111"),"9":("111","101","111","001","111")}
+
+_FONT = {
+    "A":("010","101","111","101","101"),"B":("110","101","110","101","110"),
+    "C":("011","100","100","100","011"),"D":("110","101","101","101","110"),
+    "E":("111","100","110","100","111"),"F":("111","100","110","100","100"),
+    "G":("011","100","101","101","011"),"H":("101","101","111","101","101"),
+    "I":("111","010","010","010","111"),"K":("101","101","110","101","101"),
+    "L":("100","100","100","100","111"),"M":("101","111","111","101","101"),
+    "N":("101","111","111","111","101"),"O":("010","101","101","101","010"),
+    "P":("110","101","110","100","100"),"R":("110","101","110","101","101"),
+    "S":("011","100","010","001","110"),"T":("111","010","010","010","010"),
+    "U":("101","101","101","101","111"),"V":("101","101","101","101","010"),
+    "W":("101","101","111","111","101"),
+    "Y":("101","101","010","010","010")," ":("000",)*5,
+}
 
 
 def _frame(fill:Color=BLACK): return bytearray(fill*(WIDTH*HEIGHT))
@@ -98,3 +116,66 @@ def render_frame(*,score:int,balls_used:int,ball_position=None,last_shot:ShotRes
         bx,by=ball_position; _circle(f,bx,by,4,BLUE); _circle(f,bx-1,by-1,1,WHITE)
     if len(f)!=RGB888_BYTE_LENGTH: raise RuntimeError("renderer produced wrong framebuffer size")
     return bytes(f)
+
+
+def _lower_text(frame, text, x, y, color, scale=1):
+    for index, char in enumerate(text):
+        pattern = _FONT.get(char, _DIGITS.get(char, _FONT[" "]))
+        for row, bits in enumerate(pattern):
+            for col, bit in enumerate(bits):
+                if bit == "1":
+                    for yy in range(scale):
+                        for xx in range(scale):
+                            px = x + index * 4 * scale + col * scale + xx
+                            py = y + row * scale + yy
+                            if 0 <= px < LOWER_WIDTH and 0 <= py < LOWER_HEIGHT:
+                                offset = (py * LOWER_WIDTH + px) * 3
+                                frame[offset:offset + 3] = bytes(color)
+
+
+def _centered_lower_text(frame, text, y, color, scale=1):
+    width = lower_text_width(text, scale)
+    _lower_text(frame, text, max(0, (LOWER_WIDTH - width) // 2), y, color, scale)
+
+
+def lower_text_width(text: str, scale: int = 1) -> int:
+    return max(0, len(text) * 4 * scale - scale)
+
+
+def render_lower_frame(label: str, center: str, helper: str, *, aim: AimPosition | None = None,
+                       power_taps: int = 0, power_zone: PowerZone | None = None) -> bytes:
+    """Render the consistent label / selection / help hierarchy at 64x32."""
+    frame = bytearray(BLACK * (LOWER_WIDTH * LOWER_HEIGHT))
+    _centered_lower_text(frame, label.upper(), 1, GRAY)
+    if aim is not None:
+        # Compact directional arrows: left, straight ahead, right. No crosshair glyphs.
+        positions = (14, 30, 46)
+        selected = (AimPosition.LEFT, AimPosition.CENTER, AimPosition.RIGHT).index(aim)
+        for index, x in enumerate(positions):
+            color = ORANGE if index == selected else GRAY
+            if index == 0:
+                points = ((x,15),(x+1,14),(x+1,16),(x+2,13),(x+2,17),(x+2,15),(x+6,15))
+            elif index == 1:
+                points = ((x+3,12),(x+2,13),(x+4,13),(x+1,14),(x+5,14),(x+3,13),(x+3,18))
+            else:
+                points = ((x+6,15),(x+5,14),(x+5,16),(x+4,13),(x+4,17),(x,15))
+            for px, py in points:
+                offset = (py * LOWER_WIDTH + px) * 3
+                frame[offset:offset + 3] = bytes(color)
+    elif label.upper() == "POWER":
+        for index in range(12):
+            color = YELLOW if index < 4 else GREEN if index < 8 else RED
+            if index >= min(power_taps, 12): color = DARK_GRAY
+            x = 4 + index * 5
+            for yy in range(12, 19):
+                for xx in range(x, x + 3):
+                    offset = (yy * LOWER_WIDTH + xx) * 3
+                    frame[offset:offset + 3] = bytes(color)
+    else:
+        center = center.upper()
+        scale = 2 if len(center) <= 8 else 1
+        _centered_lower_text(frame, center, 10 if scale == 2 else 13, WHITE, scale)
+    _centered_lower_text(frame, helper.upper(), 25, CYAN)
+    if len(frame) != LOWER_RGB888_BYTE_LENGTH:
+        raise RuntimeError("lower renderer produced wrong framebuffer size")
+    return bytes(frame)

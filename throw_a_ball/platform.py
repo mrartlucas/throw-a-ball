@@ -52,5 +52,16 @@ class DartsnutFacade:
     def submit(self, frame: bytes) -> bool:
         return bool(self._sdk.update_frame_buffer(bytearray(frame)))
 
+    def submit_lower(self, frame: bytes) -> bool:
+        """Submit the 64x32 setup display when the host exposes one.
+
+        Older development SDKs only expose the main framebuffer, so keeping this
+        capability optional lets the same build continue to run on them.
+        """
+        update = getattr(self._sdk, "update_lower_frame_buffer", None)
+        if update is None:
+            update = getattr(self._sdk, "update_secondary_frame_buffer", None)
+        return bool(update(bytearray(frame))) if update is not None else False
+
     def close(self) -> None:
         self._sdk.close()

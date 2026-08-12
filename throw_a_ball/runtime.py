@@ -6,7 +6,7 @@ import time
 from typing import Callable
 
 from throw_a_ball.platform import DartsnutFacade
-from throw_a_ball.rendering import render_frame
+from throw_a_ball.rendering import render_frame, render_lower_frame
 from throw_a_ball.roller_ball import (
     AIM_X, AimPosition, BALLS_PER_GAME, POWER_SECONDS, RESULT_HOLD_SECONDS, ROLL_SECONDS,
     PowerZone, power_zone_for_taps, resolve_arcade_shot, resolve_pro_shot, sample_ball_position,
@@ -19,6 +19,8 @@ class PlayStyle(str, Enum):
 
 
 class Phase(str, Enum):
+    GAME_SELECT = "game_select"
+    MACHINE_SELECT = "machine_select"
     STYLE_SELECT = "style_select"
     ARCADE_READY = "arcade_ready"
     PRO_AIM = "pro_aim"
@@ -37,7 +39,7 @@ class RollerBallRuntime:
     def __init__(self, facade: DartsnutFacade, monotonic: Callable[[], float] = time.monotonic):
         self.facade = facade
         self.monotonic = monotonic
-        self.phase = Phase.STYLE_SELECT
+        self.phase = Phase.GAME_SELECT
         self.style_index = 0
         self.style: PlayStyle | None = None
         self.score = 0
@@ -52,6 +54,31 @@ class RollerBallRuntime:
         self.power_taps = 0
         self.power_zone: PowerZone | None = None
         self.cached_frame = render_frame(score=0, balls_used=0, ui_mode="style", style_index=0)
+
+    def _lower_frame(self):
+        if self.phase is Phase.GAME_SELECT:
+            return render_lower_frame("GAME", "ROLLER BALL", "A NEXT")
+        if self.phase is Phase.MACHINE_SELECT:
+            return render_lower_frame("MACHINE", "ROLLER BALL", "A NEXT  B BACK")
+        if self.phase is Phase.STYLE_SELECT:
+            return render_lower_frame("PLAY", "ARCADE" if self.style_index == 0 else "PRO", "A NEXT  B BACK")
+        if self.phase is Phase.PRO_AIM:
+            return render_lower_frame("AIM", "", "A LOCK  B BACK", aim=self.aim)
+        if self.phase is Phase.PRO_POWER:
+            return render_lower_frame("POWER", "", "A MASH  B BACK", power_taps=self.power_taps)
+        if self.phase is Phase.PRO_THROW_READY:
+            return render_lower_frame("THROW", "READY", "THROW  B BACK")
+        if self.phase is Phase.WAIT_FOR_REMOVAL:
+            return render_lower_frame("BALL", "REMOVE DART", "WAIT")
+        if self.phase is Phase.GAME_OVER:
+            return render_lower_frame("GAME", "GAME OVER", "A RESTART")
+        if self.phase in (Phase.BALL_ROLL, Phase.RESULT):
+            return render_lower_frame("THROW", "ROLLING" if self.phase is Phase.BALL_ROLL else "SCORE", "WAIT")
+        return render_lower_frame("THROW", "READY", "THROW")
+
+    def _submit(self):
+        self.facade.submit(self.cached_frame)
+        self.facade.submit_lower(self._lower_frame())
 
     def restart(self):
         self.__init__(self.facade, self.monotonic)
@@ -114,21 +141,37 @@ class RollerBallRuntime:
         now = self.monotonic()
         buttons = self.facade.buttons()
 
+        if self.phase is Phase.GAME_SELECT:
+            if "btn_a" in buttons:
+                self.phase = Phase.MACHINE_SELECT
+            self._submit()
+            return
+
+        if self.phase is Phase.MACHINE_SELECT:
+            if "btn_b" in buttons:
+                self.phase = Phase.GAME_SELECT
+            elif "btn_a" in buttons:
+                self.phase = Phase.STYLE_SELECT
+            self._submit()
+            return
+
         if self.phase is Phase.STYLE_SELECT:
             if "btn_left" in buttons or "btn_right" in buttons:
                 self.style_index = 1 - self.style_index
             if "btn_a" in buttons:
                 self.style = PlayStyle.ARCADE if self.style_index == 0 else PlayStyle.PRO
                 self._begin_next_ball()
+            elif "btn_b" in buttons:
+                self.phase = Phase.MACHINE_SELECT
             else:
                 self.cached_frame = render_frame(score=0, balls_used=0, ui_mode="style", style_index=self.style_index)
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.GAME_OVER:
             if "btn_a" in buttons:
                 self.restart()
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.WAIT_FOR_REMOVAL:
@@ -139,10 +182,15 @@ class RollerBallRuntime:
                     self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, message_code=3)
                 else:
                     self._begin_next_ball()
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.PRO_AIM:
+            if "btn_b" in buttons:
+                self.phase = Phase.STYLE_SELECT
+                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="style", style_index=1)
+                self._submit()
+                return
             if "btn_left" in buttons and self.aim_index > 0:
                 self.aim_index -= 1
                 self.aim = AIM_ORDER[self.aim_index]
@@ -159,10 +207,17 @@ class RollerBallRuntime:
                     score=self.score, balls_used=self.balls_used,
                     ui_mode="aim", aim_position=self._aim_xy(), aim_slots=True
                 )
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.PRO_POWER:
+            if "btn_b" in buttons:
+                self.phase = Phase.PRO_AIM
+                self.power_started_at = None
+                self.power_taps = 0
+                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="aim", aim_position=self._aim_xy(), aim_slots=True)
+                self._submit()
+                return
             if "btn_a" in buttons:
                 self.power_taps += 1
             elapsed = now - self.power_started_at
@@ -179,7 +234,7 @@ class RollerBallRuntime:
                     score=self.score, balls_used=self.balls_used,
                     ui_mode="power", power_taps=min(self.power_taps, 12)
                 )
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.BALL_ROLL:
@@ -202,13 +257,22 @@ class RollerBallRuntime:
                     balls_used=self.balls_used,
                     ball_position=sample_ball_position(self.current_shot, progress),
                 )
-            self.facade.submit(self.cached_frame)
+            self._submit()
             return
 
         if self.phase is Phase.RESULT:
             if now - self.result_started_at >= RESULT_HOLD_SECONDS:
                 self._finish_result_or_wait()
-            self.facade.submit(self.cached_frame)
+            self._submit()
+            return
+
+        if self.phase is Phase.PRO_THROW_READY and "btn_b" in buttons:
+            self.phase = Phase.PRO_POWER
+            self.power_started_at = now
+            self.power_taps = 0
+            self.power_zone = None
+            self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="power")
+            self._submit()
             return
 
         hits = self.facade.read_dart_hits()
@@ -220,7 +284,7 @@ class RollerBallRuntime:
             hit = hits[0]
             self._start_roll(resolve_arcade_shot(hit.x, hit.y), hit.dart_index, now)
 
-        self.facade.submit(self.cached_frame)
+        self._submit()
 
 
 def run_roller_ball(
