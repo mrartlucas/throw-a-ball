@@ -53,10 +53,12 @@ def _draw_board(f):
         _circle(f,p.x,p.y,max(2,p.radius-4),BLACK); _number(f,p.score,p.x-len(str(p.score))*2,p.y-2,c,1)
 
 def _meter(f,taps,zone):
+    # Twenty-four presses fill the 12 visual blocks, keeping the 5-second test meaningful.
+    lit=min(12,(max(0,taps)+1)//2)
     x0=20; y=115
     for i in range(12):
         c=YELLOW if i<4 else GREEN if i<8 else RED
-        _rect(f,x0+i*7,y,5,6,c if i<taps else DARK_GRAY)
+        _rect(f,x0+i*7,y,5,6,c if i<lit else DARK_GRAY)
     if zone is not None:
         c=YELLOW if zone is PowerZone.YELLOW else GREEN if zone is PowerZone.GREEN else RED
         _rect(f,14,113,3,10,c)
@@ -84,11 +86,12 @@ def render_frame(*,score:int,balls_used:int,ball_position=None,last_shot:ShotRes
             _circle(f,aim_position[0],aim_position[1],6,ORANGE,hollow=True,thickness=2); _circle(f,aim_position[0],aim_position[1],1,WHITE)
         _rect(f,35,115,58,7,ORANGE)
     elif ui_mode=="power":
-        _meter(f,min(power_taps,12),power_zone)
+        _meter(f,power_taps,power_zone)
     elif ui_mode=="ready":
         if aim_slots:
             _aim_slots(f,aim_position)
-        _rect(f,38,114,52,8,GREEN)
+        c=YELLOW if power_zone is PowerZone.YELLOW else GREEN if power_zone is PowerZone.GREEN else RED
+        _rect(f,38,114,52,8,c)
 
     if last_shot is not None and message_code in (1,2):
         _rect(f,48,114,32,9,DARK_GRAY); _number(f,last_shot.score,55,116,GREEN if last_shot.score else RED,1)
