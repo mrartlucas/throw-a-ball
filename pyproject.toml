@@ -5,6 +5,7 @@ description = "Throw A Way Games presents Throw a Ball - Dartsnut skee-ball arca
 requires-python = ">=3.11"
 dependencies = [
     "pydartsnut==1.2.1",
+    "pygame>=2.6.1,<3",
 ]
 
 [tool.pytest.ini_options]
