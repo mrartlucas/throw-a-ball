@@ -7,9 +7,9 @@ import math
 
 BOARD_SIZE = 128
 BALLS_PER_GAME = 9
-ROLL_SECONDS = 0.72
+ROLL_SECONDS = 1.2
 RESULT_HOLD_SECONDS = 1.0
-# Playtest value. Long enough to feel the Test-Your-Might mash before final tuning.
+# Playtest value preserved from v0.11. Long enough to feel the Test-Your-Might mash.
 POWER_SECONDS = 5.0
 
 
@@ -102,7 +102,6 @@ def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZ
     if type(power) is not PowerZone:
         raise TypeError("power must be a PowerZone")
 
-    # Fixed aim steers the lane path while the dart still supplies most of the shot skill.
     x = round(throw_x * 0.72 + AIM_X[aim] * 0.28)
     y = throw_y
     if power is PowerZone.RED:
@@ -114,7 +113,7 @@ def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZ
 
 
 def power_zone_for_taps(taps: int) -> PowerZone:
-    """Temporary five-second playtest thresholds for the rapid-A power mash."""
+    """Temporary five-second playtest thresholds preserved from v0.11."""
     if taps >= 20:
         return PowerZone.RED
     if taps >= 10:
