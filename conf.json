@@ -4,8 +4,8 @@
   "name": "Throw a Ball",
   "author": "Throw A Way Games",
   "version": "0.12.0",
-  "description": "Roller Ball v0.12 playtest preserving v0.11 fresh-dart gating and 5-second Pro power mash with Screen 2 setup UI.",
-  "size": [128, 128],
+  "description": "Roller Ball v0.12 playtest preserving v0.11 throw safety with Screen 2 embedded in the Dartsnut 128x160 full framebuffer.",
+  "size": [128, 160],
   "fields": [],
   "preview": [""]
 }
