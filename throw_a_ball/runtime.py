@@ -82,8 +82,7 @@ class RollerBallRuntime:
     def _fresh_hit(self):
         """Return at most one legal fresh dart hit; retained/stale darts never launch a ball."""
         self._refresh_stale_darts()
-        hits = self.facade.read_dart_hits()
-        for hit in hits:
+        for hit in self.facade.read_dart_hits():
             if hit.dart_index in self.stale_dart_indices:
                 continue
             self.stale_dart_indices.add(hit.dart_index)
@@ -101,7 +100,6 @@ class RollerBallRuntime:
         self.power_started_at = None
         self.power_taps = 0
         self.power_zone = None
-        # Anything already sitting in the board when a new ball begins is not a legal throw.
         self._refresh_stale_darts()
         self._mark_active_darts_stale()
         self._consume_nonready_dart_hits()
@@ -191,7 +189,7 @@ class RollerBallRuntime:
                 self.phase = Phase.PRO_POWER
                 self.power_started_at = now
                 self.power_taps = 0
-                self.cached_frame = render_frame(self.score, self.balls_used, ui_mode="power", power_taps=0)
+                self.cached_frame = render_frame(score=self.score, balls_used=self.balls_used, ui_mode="power", power_taps=0)
             else:
                 self.cached_frame = render_frame(
                     score=self.score, balls_used=self.balls_used,
@@ -208,7 +206,6 @@ class RollerBallRuntime:
             if elapsed >= POWER_SECONDS:
                 self.power_zone = power_zone_for_taps(self.power_taps)
                 self.phase = Phase.PRO_THROW_READY
-                # Establish a fresh-dart baseline exactly when the throw becomes armed.
                 self._refresh_stale_darts()
                 self._mark_active_darts_stale()
                 self._consume_nonready_dart_hits()
