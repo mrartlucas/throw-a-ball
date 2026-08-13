@@ -1,4 +1,4 @@
-"""RGB888 renderers for the 128x128 Roller Ball board and 64x32 setup display."""
+"""RGB888 renderers for the 128x128 Roller Ball board and 64x32 secondary display."""
 from __future__ import annotations
 
 from throw_a_ball.roller_ball import AimPosition, POCKETS, PowerZone, ShotResult
@@ -45,8 +45,7 @@ def _draw_board(f):
         c=_pocket_color(p.score); _circle(f,p.x,p.y,p.radius+2,DARK_GRAY); _circle(f,p.x,p.y,p.radius,c,hollow=True,thickness=3); _circle(f,p.x,p.y,max(2,p.radius-4),BLACK); _number(f,p.score,p.x-len(str(p.score))*2,p.y-2,c,1)
 
 def _meter(f,taps,zone):
-    lit=min(12,int(max(0,float(taps))//2))
-    x0=20; y=115
+    lit=min(12,int(max(0,float(taps))//2)); x0=20; y=115
     for i in range(12):
         c=YELLOW if i<4 else GREEN if i<8 else RED
         _rect(f,x0+i*7,y,5,6,c if i<lit else DARK_GRAY)
@@ -97,29 +96,68 @@ def _lower_text(frame,text,x,y,color,scale=1):
                                 offset=(py*LOWER_WIDTH+px)*3; frame[offset:offset+3]=bytes(color)
 def lower_text_width(text:str,scale:int=1)->int: return max(0,len(text)*4*scale-scale)
 def _centered_lower_text(frame,text,y,color,scale=1): _lower_text(frame,text,max(0,(LOWER_WIDTH-lower_text_width(text,scale))//2),y,color,scale)
+def _lower_rect(frame,x,y,w,h,color):
+    for yy in range(max(0,y),min(LOWER_HEIGHT,y+h)):
+        for xx in range(max(0,x),min(LOWER_WIDTH,x+w)):
+            off=(yy*LOWER_WIDTH+xx)*3; frame[off:off+3]=bytes(color)
+def _power_color(zone):
+    if zone is PowerZone.YELLOW: return YELLOW
+    if zone is PowerZone.GREEN: return GREEN
+    if zone is PowerZone.RED: return RED
+    return GRAY
 
-def render_lower_frame(label:str,center:str,helper:str,*,aim:AimPosition|None=None,power_taps:float=0,power_zone:PowerZone|None=None)->bytes:
-    frame=bytearray(BLACK*(LOWER_WIDTH*LOWER_HEIGHT)); _centered_lower_text(frame,label.upper(),1,GRAY)
-    if aim is not None:
-        positions=(14,30,46); selected=(AimPosition.LEFT,AimPosition.CENTER,AimPosition.RIGHT).index(aim)
-        for index,x in enumerate(positions):
-            color=ORANGE if index==selected else GRAY
-            if index==0: points=((x,15),(x+1,14),(x+1,16),(x+2,13),(x+2,17),(x+2,15),(x+6,15))
-            elif index==1: points=((x+3,12),(x+2,13),(x+4,13),(x+1,14),(x+5,14),(x+3,13),(x+3,18))
-            else: points=((x+6,15),(x+5,14),(x+5,16),(x+4,13),(x+4,17),(x,15))
-            for px,py in points:
-                offset=(py*LOWER_WIDTH+px)*3; frame[offset:offset+3]=bytes(color)
+def _draw_lower_aim(frame,aim):
+    positions=(14,30,46); selected=(AimPosition.LEFT,AimPosition.CENTER,AimPosition.RIGHT).index(aim)
+    for index,x in enumerate(positions):
+        color=ORANGE if index==selected else GRAY
+        if index==0: pts=((x,15),(x+1,14),(x+1,16),(x+2,13),(x+2,17),(x+2,15),(x+6,15))
+        elif index==1: pts=((x+3,12),(x+2,13),(x+4,13),(x+1,14),(x+5,14),(x+3,13),(x+3,18))
+        else: pts=((x+6,15),(x+5,14),(x+5,16),(x+4,13),(x+4,17),(x,15))
+        for px,py in pts:
+            off=(py*LOWER_WIDTH+px)*3; frame[off:off+3]=bytes(color)
+def _draw_lower_meter(frame,taps):
+    lit=min(12,int(max(0,float(taps))//2))
+    for index in range(12):
+        color=YELLOW if index<4 else GREEN if index<8 else RED
+        if index>=lit: color=DARK_GRAY
+        _lower_rect(frame,4+index*5,13,3,6,color)
+def _draw_mini_roller(frame,progress):
+    _lower_rect(frame,5,11,54,11,DARK_GRAY)
+    _lower_rect(frame,8,19,48,2,PURPLE)
+    for x in (16,28,40,52): _lower_rect(frame,x,12,4,4,CYAN)
+    bx=8+round(max(0.0,min(1.0,float(progress)))*45)
+    _lower_rect(frame,bx,17,3,3,BLUE)
+
+def render_lower_frame(label:str,center:str,helper:str,*,aim:AimPosition|None=None,power_taps:float=0,power_zone:PowerZone|None=None,player:int=1,rolling_progress:float|None=None,result_score:int|None=None)->bytes:
+    frame=bytearray(BLACK*(LOWER_WIDTH*LOWER_HEIGHT))
+    _lower_rect(frame,0,0,64,2,PURPLE)
+    _lower_text(frame,f"P{player}",1,3,BLUE,1)
+    _centered_lower_text(frame,label.upper(),3,PURPLE)
+
+    if rolling_progress is not None:
+        _draw_mini_roller(frame,rolling_progress)
+    elif result_score is not None:
+        _centered_lower_text(frame,"SCORE",9,GRAY)
+        text=str(result_score); scale=2 if len(text)<=3 else 1
+        _centered_lower_text(frame,text,15,GREEN if result_score else RED,scale)
+    elif aim is not None and label.upper()=="AIM":
+        _draw_lower_aim(frame,aim)
     elif label.upper()=="POWER":
-        lit=min(12,int(max(0,float(power_taps))//2))
-        for index in range(12):
-            color=YELLOW if index<4 else GREEN if index<8 else RED
-            if index>=lit: color=DARK_GRAY
-            x=4+index*5
-            for yy in range(12,19):
-                for xx in range(x,x+3):
-                    offset=(yy*LOWER_WIDTH+xx)*3; frame[offset:offset+3]=bytes(color)
+        _draw_lower_meter(frame,power_taps)
+        if aim is not None:
+            _lower_text(frame,aim.value[0].upper(),1,14,ORANGE)
+    elif label.upper()=="THROW" and center.upper()=="READY":
+        _centered_lower_text(frame,"THROW",9,WHITE,2)
+        _centered_lower_text(frame,"READY",20,_power_color(power_zone),1)
+        if aim is not None:
+            _lower_text(frame,aim.value[0].upper(),1,22,ORANGE)
+        if power_zone is not None:
+            _lower_rect(frame,58,20,4,6,_power_color(power_zone))
     else:
-        center=center.upper(); scale=2 if len(center)<=8 else 1; _centered_lower_text(frame,center,10 if scale==2 else 13,WHITE,scale)
-    _centered_lower_text(frame,helper.upper(),25,CYAN)
+        center=center.upper(); scale=2 if len(center)<=8 else 1
+        _centered_lower_text(frame,center,11 if scale==2 else 14,WHITE,scale)
+
+    if helper:
+        _centered_lower_text(frame,helper.upper(),26,CYAN)
     if len(frame)!=LOWER_RGB888_BYTE_LENGTH: raise RuntimeError("lower renderer produced wrong framebuffer size")
     return bytes(frame)
