@@ -2,34 +2,34 @@
 
 **Throw A Way Games presents Throw a Ball**
 
-## Roller Ball prototype v0.12
+## Roller Ball prototype v0.13 recovery
 
-This branch is the corrected v0.12 line built directly on `prototype/roller-ball-v0.11`.
+This branch is the cabinet-test recovery pass built directly on `prototype/roller-ball-v0.12`.
 
-Preserved from v0.11:
-- fresh-dart gating / stale-hit draining
-- 5-second Test-Your-Might Pro power mash
-- charge decay and scaled power behavior
-- immediate Pro throw arming after Power
-- three fixed Aim positions
+Recovered for this test:
+- Player-facing **PRO ROLLER** naming.
+- Screen 2 setup hierarchy: **GAME -> THROW A BALL**, **MACHINE -> ROLLER BALL**, then **PLAY -> ARCADE / PRO ROLLER**.
+- Purple Throw a Ball identity accents on Screen 2 without replacing player or power semantic colors.
+- P1 indicator slot on Screen 2.
+- Locked Aim remains visible through Power and Throw Ready.
+- Locked Power zone remains visible at Throw Ready.
+- Power meter still decays visibly when tapping stops.
+- Throw Ready is a major Screen 2 billboard state.
+- Screen 2 gets a miniature Roller Ball action animation during ball travel.
+- Screen 2 gets a large result payoff after the ball lands.
+- Pro Aim has more horizontal authority for this playtest: 45% Aim / 55% final dart X.
+- Result hold increased slightly to 1.3 seconds so Screen 2 payoff can read.
 
-Added for v0.12:
-- GAME -> MACHINE -> PLAY setup hierarchy
-- B-button back navigation
-- 64x32 Screen 2 setup renderer
-- pygame Screen 2 emulator preview
-- small Left / Center / Right Aim arrows on Screen 1
-- Roller Ball board remains visible during setup
-- 1.2-second readable ball travel before scoring
+Preserved:
+- Arcade = one physical dart launches one virtual ball.
+- Pro = Left/Center/Right Aim -> A lock -> 5-second Test-Your-Might A mash -> Throw Ready -> one scoring dart.
+- Fresh-dart gating and stale-hit draining.
+- Scoring dart removal before the next ball.
+- Yellow/Green/Red power semantics, no numeric player-facing power value.
+- 128x160 combined framebuffer with 128x128 Screen 1 and 64x32 Screen 2 in the lower-left.
 
-Arcade remains: throw one physical dart, watch the virtual ball travel, score, remove the dart, next ball.
-
-Pro remains: select Left / Center / Right Aim, lock with A, mash A during the 5-second Power window, reach Throw Ready, then throw one physical scoring dart.
-
-For development environments that can pass command-line flags, Screen 2 can be previewed with:
+For development environments that can pass command-line flags:
 
 ```bash
 python main.py --screen2-window
 ```
-
-The Dartsnut Agent playtest package may use an Agent-specific launcher so the user does not need Terminal access.
