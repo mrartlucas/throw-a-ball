@@ -8,29 +8,20 @@ import math
 BOARD_SIZE = 128
 BALLS_PER_GAME = 9
 ROLL_SECONDS = 1.2
-RESULT_HOLD_SECONDS = 1.0
-# Playtest value preserved from v0.11. Long enough to feel the Test-Your-Might mash.
+RESULT_HOLD_SECONDS = 1.3
 POWER_SECONDS = 5.0
-
 
 class PowerZone(str, Enum):
     YELLOW = "yellow"
     GREEN = "green"
     RED = "red"
 
-
 class AimPosition(str, Enum):
     LEFT = "left"
     CENTER = "center"
     RIGHT = "right"
 
-
-AIM_X = {
-    AimPosition.LEFT: 50,
-    AimPosition.CENTER: 64,
-    AimPosition.RIGHT: 78,
-}
-
+AIM_X = {AimPosition.LEFT: 50, AimPosition.CENTER: 64, AimPosition.RIGHT: 78}
 
 @dataclass(frozen=True)
 class Pocket:
@@ -39,7 +30,6 @@ class Pocket:
     x: int
     y: int
     radius: int
-
 
 POCKETS: tuple[Pocket, ...] = (
     Pocket("100L", 100, 32, 35, 10),
@@ -54,7 +44,6 @@ TEN_CATCH_CENTER = (64, 78)
 TEN_CATCH_RADIUS_X = 44
 TEN_CATCH_RADIUS_Y = 39
 
-
 @dataclass(frozen=True)
 class ShotResult:
     dart_x: int
@@ -64,11 +53,9 @@ class ShotResult:
     score: int
     label: str
 
-
 def _validate_coordinate(value: int, name: str) -> None:
     if type(value) is not int or not 0 <= value < BOARD_SIZE:
         raise ValueError(f"{name} must be an integer from 0 through 127")
-
 
 def _resolve_effective(x: int, y: int, dart_x: int, dart_y: int) -> ShotResult:
     pocket_hits: list[tuple[float, Pocket]] = []
@@ -79,30 +66,25 @@ def _resolve_effective(x: int, y: int, dart_x: int, dart_y: int) -> ShotResult:
     if pocket_hits:
         _, pocket = min(pocket_hits, key=lambda item: item[0])
         return ShotResult(dart_x, dart_y, pocket.x, pocket.y, pocket.score, pocket.name)
-
     cx, cy = TEN_CATCH_CENTER
     normalized = ((x - cx) / TEN_CATCH_RADIUS_X) ** 2 + ((y - cy) / TEN_CATCH_RADIUS_Y) ** 2
     if normalized <= 1.0 and y >= 47:
         return ShotResult(dart_x, dart_y, 64, 101, 10, "10")
     return ShotResult(dart_x, dart_y, x, min(y, 112), 0, "MISS")
 
-
 def resolve_arcade_shot(x: int, y: int) -> ShotResult:
     _validate_coordinate(x, "x")
     _validate_coordinate(y, "y")
     return _resolve_effective(x, y, x, y)
 
-
 def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZone) -> ShotResult:
-    """Combine fixed lane aim, final dart hit, and power correction."""
     if type(aim) is not AimPosition:
         raise TypeError("aim must be an AimPosition")
     _validate_coordinate(throw_x, "throw_x")
     _validate_coordinate(throw_y, "throw_y")
     if type(power) is not PowerZone:
         raise TypeError("power must be a PowerZone")
-
-    x = round(throw_x * 0.72 + AIM_X[aim] * 0.28)
+    x = round(throw_x * 0.55 + AIM_X[aim] * 0.45)
     y = throw_y
     if power is PowerZone.RED:
         y -= 13
@@ -111,15 +93,12 @@ def resolve_pro_shot(aim: AimPosition, throw_x: int, throw_y: int, power: PowerZ
     y = max(0, min(127, y))
     return _resolve_effective(x, y, throw_x, throw_y)
 
-
 def power_zone_for_taps(taps: int) -> PowerZone:
-    """Temporary five-second playtest thresholds preserved from v0.11."""
     if taps >= 20:
         return PowerZone.RED
     if taps >= 10:
         return PowerZone.GREEN
     return PowerZone.YELLOW
-
 
 def sample_ball_position(shot: ShotResult, progress: float) -> tuple[int, int]:
     if not isinstance(shot, ShotResult):
